@@ -2,8 +2,11 @@
  * Author: Jonathan Link
  * Email: jonathanlink[d o t]email[a t]gmail[d o t]com
  * Date of creation: 13.11.2014
- * Version: 0.1
+ * Version: 2.2.5
  * Description:
+ *
+ * Version 2.1 uses PDFBox 2.x. Version 1.0 used PDFBox 1.8.x
+ * Acknowledgement to James Sullivan for version 2.0
  *
  * What does it DO:
  * This object converts the content of a PDF file into a String.
@@ -14,31 +17,21 @@
  *
  * I would appreciate any feedback you could offer. (see my email address above)
  *
- * LICENSE:
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2014-2015 Jonathan Link
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *
  */
+
+/* Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. */
+
+
 
 package app;
 
@@ -47,15 +40,19 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Vector;
 
-import org.apache.pdfbox.cos.COSStream;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.util.PDFTextStripper;
-import org.apache.pdfbox.util.TextPosition;
-import org.apache.pdfbox.util.TextPositionComparator;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.pdfbox.text.TextPosition;
+import org.apache.pdfbox.text.TextPositionComparator;
 
+/**
+* Java doc to be completed
+* 
+* @author Jonathan Link
+* 
+*/
 public class PDFLayoutTextStripper extends PDFTextStripper {
 
     public static final boolean DEBUG = false;
@@ -65,18 +62,25 @@ public class PDFLayoutTextStripper extends PDFTextStripper {
     private TextPosition previousTextPosition;
     private List<TextLine> textLineList;
 
+    /**
+    * Constructor
+    */
     public PDFLayoutTextStripper() throws IOException {
         super();
         this.previousTextPosition = null;
         this.textLineList = new ArrayList<TextLine>();
     }
 
+    /**
+    * 
+    * @param page page to parse
+    */
     @Override
-    protected void processPage(PDPage page, COSStream content ) throws IOException {
-        PDRectangle pageRectangle = page.findMediaBox();
+    public void processPage(PDPage page) throws IOException {
+        PDRectangle pageRectangle = page.getMediaBox();
         if (pageRectangle!= null) {
             this.setCurrentPageWidth(pageRectangle.getWidth());
-            super.processPage(page, content);
+            super.processPage(page);
             this.previousTextPosition = null;
             this.textLineList = new ArrayList<TextLine>();
         }
@@ -84,11 +88,15 @@ public class PDFLayoutTextStripper extends PDFTextStripper {
 
     @Override
     protected void writePage() throws IOException {
-        Vector<List<TextPosition>> charactersByArticle = super.getCharactersByArticle();
+        List<List<TextPosition>> charactersByArticle = super.getCharactersByArticle();
         for( int i = 0; i < charactersByArticle.size(); i++) {
-           List<TextPosition> textList = charactersByArticle.get(i);
-           this.sortTextPositionList(textList);
-           this.iterateThroughTextList(textList.iterator()) ;
+            List<TextPosition> textList = charactersByArticle.get(i);
+            try {
+                this.sortTextPositionList(textList);
+            } catch ( java.lang.IllegalArgumentException e) {
+                System.err.println(e);
+            }
+            this.iterateThroughTextList(textList.iterator()) ;
         }
         this.writeToOutputStream(this.getTextLineList());
     }
@@ -110,18 +118,6 @@ public class PDFLayoutTextStripper extends PDFTextStripper {
     private void sortTextPositionList(final List<TextPosition> textList) {
         TextPositionComparator comparator = new TextPositionComparator();
         Collections.sort(textList, comparator);
-    }
-
-    private int computeAverageCharacterWidth(final List<TextPosition> textPositionList) {
-        if (textPositionList.size() == 0) {
-            return 0;
-        } else {
-            double averageWidth = 0.0;
-            for (TextPosition textPosition : textPositionList) {
-                averageWidth += textPosition.getWidthOfSpace();
-            }
-            return (int) Math.floor( averageWidth ) / textPositionList.size();
-        }
     }
 
     private void writeLine(final List<TextPosition> textPositionList) {
@@ -155,6 +151,9 @@ public class PDFLayoutTextStripper extends PDFTextStripper {
             }
             this.setPreviousTextPosition(textPosition);
         }
+        if (!textPositionList.isEmpty()) {
+            this.writeTextPositionList(textPositionList);
+        }
     }
 
     private void writeTextPositionList(final List<TextPosition> textPositionList) {
@@ -174,13 +173,14 @@ public class PDFLayoutTextStripper extends PDFTextStripper {
             return 1;
         }
 
-        double textYPosition = Math.round( textPosition.getTextPos().getYPosition() );
-        double previousTextYPosition = Math.round( previousTextPosition.getTextPos().getYPosition() );
+        float textYPosition = Math.round( textPosition.getY() );
+        float previousTextYPosition = Math.round( previousTextPosition.getY() );
 
-        if ( textYPosition < previousTextYPosition ) {
+        if ( textYPosition > previousTextYPosition && (textYPosition - previousTextYPosition > 5.5) ) {
             double height = textPosition.getHeight();
-            int numberOfLines = (int) (Math.floor( previousTextYPosition - textYPosition) / height );
+            int numberOfLines = (int) (Math.floor( textYPosition - previousTextYPosition) / height );
             numberOfLines = Math.max(1, numberOfLines - 1); // exclude current new line
+            if (DEBUG) System.out.println(height + " " + numberOfLines);
             return numberOfLines ;
         } else {
             return 0;
@@ -402,13 +402,13 @@ class CharacterFactory {
         this.isCharacterAtTheBeginningOfNewLine = this.isCharacterAtTheBeginningOfNewLine(textPosition);
         this.isCharacterCloseToPreviousWord = this.isCharacterCloseToPreviousWord(textPosition);
         char character = this.getCharacterFromTextPosition(textPosition);
-        int index = (int)textPosition.getTextPos().getXPosition() / PDFLayoutTextStripper.OUTPUT_SPACE_CHARACTER_WIDTH_IN_PT;
+        int index = (int)textPosition.getX() / PDFLayoutTextStripper.OUTPUT_SPACE_CHARACTER_WIDTH_IN_PT;
         return new Character(character,
-                index,
-                isCharacterPartOfPreviousWord,
-                isFirstCharacterOfAWord,
-                isCharacterAtTheBeginningOfNewLine,
-                isCharacterCloseToPreviousWord);
+                             index,
+                             isCharacterPartOfPreviousWord,
+                             isFirstCharacterOfAWord,
+                             isCharacterAtTheBeginningOfNewLine,
+                             isCharacterCloseToPreviousWord);
     }
 
     private boolean isCharacterAtTheBeginningOfNewLine(final TextPosition textPosition) {
@@ -416,8 +416,8 @@ class CharacterFactory {
             return true;
         }
         TextPosition previousTextPosition = this.getPreviousTextPosition();
-        double previousTextYPosition = previousTextPosition.getTextPos().getYPosition();
-        return ( Math.round( textPosition.getTextPos().getYPosition() ) < Math.round(previousTextYPosition) );
+        float previousTextYPosition = previousTextPosition.getY();
+        return ( Math.round( textPosition.getY() ) < Math.round(previousTextYPosition) );
     }
 
     private boolean isFirstCharacterOfAWord(final TextPosition textPosition) {
@@ -433,13 +433,12 @@ class CharacterFactory {
             return false;
         }
         double numberOfSpaces = this.numberOfSpacesBetweenTwoCharacters(previousTextPosition, textPosition);
-        int widthOfSpace = (int) Math.ceil(textPosition.getWidthOfSpace());
-        return (numberOfSpaces > 1 && numberOfSpaces <= widthOfSpace);
+        return (numberOfSpaces > 1 && numberOfSpaces <= PDFLayoutTextStripper.OUTPUT_SPACE_CHARACTER_WIDTH_IN_PT);
     }
 
     private boolean isCharacterPartOfPreviousWord(final TextPosition textPosition) {
         TextPosition previousTextPosition = this.getPreviousTextPosition();
-        if ( previousTextPosition.getCharacter().equals(" ") ) {
+        if ( previousTextPosition.getUnicode().equals(" ") ) {
             return false;
         }
         double numberOfSpaces = this.numberOfSpacesBetweenTwoCharacters(previousTextPosition, textPosition);
@@ -447,17 +446,17 @@ class CharacterFactory {
     }
 
     private double numberOfSpacesBetweenTwoCharacters(final TextPosition textPosition1, final TextPosition textPosition2) {
-        double previousTextXPosition = textPosition1.getTextPos().getXPosition();
+        double previousTextXPosition = textPosition1.getX();
         double previousTextWidth = textPosition1.getWidth();
         double previousTextEndXPosition = (previousTextXPosition + previousTextWidth);
-        double numberOfSpaces = Math.abs(Math.round(textPosition2.getTextPos().getXPosition() - previousTextEndXPosition));
+        double numberOfSpaces = Math.abs(Math.round(textPosition2.getX() - previousTextEndXPosition));
         return numberOfSpaces;
     }
 
 
 
     private char getCharacterFromTextPosition(final TextPosition textPosition) {
-        String string = textPosition.getCharacter();
+        String string = textPosition.getUnicode();
         char character = string.charAt(0);
         return character;
     }
