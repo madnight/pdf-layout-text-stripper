@@ -3,19 +3,19 @@ package app;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.File;
 
 import org.apache.pdfbox.pdfparser.PDFParser;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.util.PDFTextStripper;
+import org.apache.pdfbox.text.PDFTextStripper;
 
 public class App {
 
     public static void main(String[] args) {
         String string = null;
         try {
-            PDFParser pdfParser = new PDFParser(new FileInputStream(args[0]));
-            pdfParser.parse();
-            PDDocument pdDocument = new PDDocument(pdfParser.getDocument());
+            File file = new File(args[0]);
+            PDDocument pdDocument = PDDocument.load(file);
             PDFTextStripper pdfTextStripper = new PDFLayoutTextStripper();
             string = pdfTextStripper.getText(pdDocument);
         } catch (FileNotFoundException e) {
